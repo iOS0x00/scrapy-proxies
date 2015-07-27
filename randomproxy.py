@@ -23,24 +23,23 @@ import random
 import base64
 from scrapy import log
 
+
 class RandomProxy(object):
     def __init__(self, settings):
+        self.switch = settings.get('RANDOM_PROXY_ENABLE', False)
         self.proxy_list = settings.get('PROXY_LIST')
-        fin = open(self.proxy_list)
+        with open(self.proxy_list) as fin:
+            self.proxies = {}
+            for line in fin.readlines():
+                parts = re.match('(\w+://)(\w+:\w+@)?(.+)', line)
 
-        self.proxies = {}
-        for line in fin.readlines():
-            parts = re.match('(\w+://)(\w+:\w+@)?(.+)', line)
+                # Cut trailing @
+                if parts.group(2):
+                    user_pass = parts.group(2)[:-1]
+                else:
+                    user_pass = ''
 
-            # Cut trailing @
-            if parts.group(2):
-                user_pass = parts.group(2)[:-1]
-            else:
-                user_pass = ''
-
-            self.proxies[parts.group(1) + parts.group(3)] = user_pass
-
-        fin.close()
+                self.proxies[parts.group(1) + parts.group(3)] = user_pass
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -49,6 +48,10 @@ class RandomProxy(object):
     def process_request(self, request, spider):
         # Don't overwrite with a random one (server-side state for IP)
         if 'proxy' in request.meta:
+            return
+
+        # Detect middleware on/off switch
+        if not self.switch:
             return
 
         proxy_address = random.choice(self.proxies.keys())
